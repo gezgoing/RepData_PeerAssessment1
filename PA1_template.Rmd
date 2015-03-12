@@ -7,19 +7,191 @@ output:
 
 
 ## Loading and preprocessing the data
+### 1. Load the data
+```{r}
+fileUrl<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(fileUrl,dest="repdata-data-activity.zip",method="curl")
+unzip("repdata-data-activity.zip","activity.csv")
+```
 
+### 2. Process/transform the data (if necessary) into a format suitable for your analysis
+```{r}
+activity<-read.csv("activity.csv")
+str(activity)
+summary(activity)
+activity$date<-as.Date(activity$date)
+str(activity)
+```
 
 
 ## What is mean total number of steps taken per day?
+### 1. Make a histogram of the total number of steps taken each day
 
+  1-1. Calculate the total number of steps taken per day
+```{r}
+library(reshape)
+meltByDay<-melt(activity,id="date", na.rm = TRUE)
+smryByDay<-cast(meltByDay,date~variable,sum,subset=variable=="steps")
+head(smryByDay);tail(smryByDay)
+summary(smryByDay)
+```
 
+  1-2. Make a histogram of the total number of steps taken each day
+```{r}
+hist(smryByDay$steps)
+```
+
+### 2. Calculate and report the mean and median total number of steps taken per day
+
+Here are the code and the results.
+```{r}
+mean(smryByDay$steps)
+median(smryByDay$steps)
+```
+
+As you in the above, the mean is `r mean(smryByDay$steps)` and the median is `r median(smryByDay$steps)`.
 
 ## What is the average daily activity pattern?
+### 1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r}
+meltByInt<-melt(activity,id="interval", na.rm = TRUE)
+smryByInt<-cast(meltByInt,interval~variable,mean,subset=variable=="steps")
+head(smryByInt);tail(smryByInt)
+summary(smryByInt)
+with(data=smryByInt, plot(interval, steps, type="l",xlab="5 minute interval", ylab="average number of steps"))
+with(data=smryByInt, abline(h=mean(steps)))
+```
 
-
+### 2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+smryByInt[smryByInt$steps==max(smryByInt$steps),]
+```
+As you see in the above, maximum number of steps is `r max(smryByInt$steps)` at the interval `r smryByInt[smryByInt$steps==max(smryByInt$steps),1]`.
 
 ## Imputing missing values
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
 
+### 1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r}
+summary(activity)
+sum(is.na(activity$steps))
+```
+As you see in the above, there are `r sum(is.na(activity$steps))` missing values only in column "steps".
+
+### 2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+Ans) I will use the mean for that 5-minute interval for the missing values.
+
+
+### 3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+act_imp<-activity
+ind<-which(is.na(act_imp$steps))
+for (i in ind){
+    act_imp$steps[i]<-smryByInt$steps[act_imp$interval[i]==smryByInt$interval]
+}
+
+summary(act_imp)
+```
+As you see in the above result of summary(act_imp), there is no missing value any more.
+
+### 4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+4-1. Caculate the total number of steps taken each day
+```{r}
+meltByDay_imp<-melt(act_imp,id="date", na.rm = TRUE)
+smryByDay_imp<-cast(meltByDay_imp,date~variable,sum,subset=variable=="steps")
+summary(smryByDay_imp)
+```
+
+4-2. Make a histogram
+```{r}
+hist(smryByDay_imp$steps)
+```
+
+4-3. Calculate and report the mean and median
+```{r}
+mean(smryByDay_imp$steps)
+median(smryByDay_imp$steps)
+```
+As you see in the above, the mean is `r mean(smryByDay_imp$steps)` and the median is `r median(smryByDay_imp$steps)`.
+
+4-4. Do these values differ from the estimates from the first part of the assignment?
+
+(i) summary
+```{r}
+summary(smryByDay_imp)
+summary(smryByDay)
+```
+As you see in the above summaries, steps in imputed data are increased.
+
+But the mean and median are changed just a little. I guess the reason is that I used the mean of the interval.
+
+(ii) comparison between histgram
+```{r}
+par(mfrow=c(1,2))
+hist(smryByDay_imp$steps,ylim=c(0,40))
+hist(smryByDay$steps,ylim=c(0,40))
+par(mfrow=c(1,1))
+```
+As like the comparison betwwen summaries, two histograms also show that the steps of the imputed data are increased.
+
+(iii) mean and median
+```{r}
+mean(smryByDay_imp$steps) # 10766.19
+mean(smryByDay$steps) # 10766.19
+mean(smryByDay_imp$steps) - mean(smryByDay$steps) # 10766.19
+mean(smryByDay_imp$steps) == mean(smryByDay$steps) # 10766.19
+```
+Coincidentally, the means are the same. I guessed it's slightly changed.
+
+```{r}
+median(smryByDay_imp$steps) # 10766.19 != 10765
+median(smryByDay$steps) # 10766.19 != 10765
+median(smryByDay_imp$steps) - median(smryByDay$steps)
+```
+The medians is changed slightly as I guessed.
+
+4-5. What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+As in the above 4-4 (ii), the overall steps are increased. I guess it's because imputing procedure I devised replaces missing data with positive steps.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+### 1. Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r}
+Sys.setlocale("LC_TIME", "en_US.UTF-8")
+act_wDE<-act_imp
+act_wDE$wDayEnd<-"weekday"
+str(act_wDE)
+summary(act_wDE)
+ind<-which(weekdays(act_wDE$date) %in% c("Saturday","Sunday"))
+act_wDE$wDayEnd[ind]<-"weekend"
+act_wDE[c(1,1441),]
+act_wDE$wDayEnd<-factor(act_wDE$wDayEnd,levels=c("weekday","weekend"))
+str(act_wDE)
+summary(act_wDE)
+```
+
+### 2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+
+2-1. Caculate the total number of steps taken each day
+```{r}
+library(sqldf)
+```
+```{r}
+head(act_wDE)
+smryBywDayEnd<-sqldf("select interval, wDayEnd, avg(steps) steps from act_wDE group by interval, wDayEnd")
+head(smryBywDayEnd,4);tail(smryBywDayEnd,4)
+summary(smryBywDayEnd)
+```
+
+2-2. Make a panel plot
+```{r}
+library(lattice)
+xyplot(steps ~ interval | wDayEnd, data = smryBywDayEnd, xlab="Interval", ylab="Number of steps", type="l", layout = c(1, 2))
+```
+
+As a result, in weekdays the steps tend to be centered in the prior portion of intervals and in weekends the steps are spread evenly through out intervals between 800 and 2000.
+
+I guess this tendency is because in weekdays people commute and in weekends people enjoy their free time whole day.
